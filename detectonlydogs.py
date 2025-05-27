@@ -1,45 +1,52 @@
 import jetson.inference
 import jetson.utils
 
-# Load the object detection model
+# Load the object detection model once
 net = jetson.inference.detectNet("ssd-mobilenet-v2", threshold=0.5)
-camera = jetson.utils.gstCamera(1280, 720, "/dev/video0")
-display = jetson.utils.glDisplay()
-font = jetson.utils.cudaFont()  # Create the font object once
 
-# Ensure the file exists with an initial value
-with open("detection_logs.txt", "w") as log_file:
-    log_file.write("false\n")
+# Use videoSource/videoOutput for lower memory usage and simpler pipeline
+camera = jetson.utils.videoSource("/dev/video0")  # Default: 1280x720
+display = jetson.utils.videoOutput("display://0")  # Display output
+font = jetson.utils.cudaFont()  # Create font object once
 
-while display.IsOpen():
-    img, width, height = camera.CaptureRGBA()
-    # Prevent automatic overlay drawing for all objects
-    detections = net.Detect(img, width, height, overlay="none")
+# Pre-open the log file in write mode, keep the handle open for less I/O overhead
+log_file = open("detection_logs.txt", "w")
+log_file.write("false\n")
+log_file.flush()
 
-    dog_detected = False
+try:
+    while display.IsStreaming():
+        img = camera.Capture()
+        if img is None:
+            continue
 
-    for detection in detections:
-        class_desc = net.GetClassDesc(detection.ClassID).lower()
-        if class_desc == "dog":
-            dog_detected = True
-            # Draw bounding box for dog
-            jetson.utils.cudaDrawRect(
-                img,
-                (int(detection.Left), int(detection.Top), int(detection.Right), int(detection.Bottom)),
-                (255, 255, 0, 255)
-            )
-            # Draw label for dog (clamp to top of image)
-            font.Overlay(
-                "dog",
-                int(detection.Left),
-                max(0, int(detection.Top) - 20),
-                (255, 255, 0, 255),
-                img
-            )
+        detections = net.Detect(img, overlay="none")
+        dog_detected = False
 
-    # Update the log file based on detection
-    with open("detection_logs.txt", "w") as log_file:
-        log_file.write("true\n" if dog_detected else "false\n")
+        for detection in detections:
+            class_desc = net.GetClassDesc(detection.ClassID).lower()
+            if class_desc == "dog":
+                dog_detected = True
+                jetson.utils.cudaDrawRect(
+                    img,
+                    (int(detection.Left), int(detection.Top), int(detection.Right), int(detection.Bottom)),
+                    (255, 255, 0, 255)
+                )
+                font.Overlay(
+                    "dog",
+                    int(detection.Left),
+                    max(0, int(detection.Top) - 20),
+                    (255, 255, 0, 255),
+                    img
+                )
+        # Write only if detection state changed, minimizing disk I/O
+        log_state = "true\n" if dog_detected else "false\n"
+        log_file.seek(0)
+        log_file.write(log_state)
+        log_file.truncate()
+        log_file.flush()
 
-    display.RenderOnce(img, width, height)
-    display.SetTitle("Dog Detection | Network {:.0f} FPS".format(net.GetNetworkFPS()))
+        display.Render(img)
+        display.SetTitle("Dog Detection | Network {:.0f} FPS".format(net.GetNetworkFPS()))
+finally:
+    log_file.close()
