@@ -12,7 +12,8 @@ with open("detection_logs.txt", "w") as log_file:
 
 while display.IsOpen():
     img, width, height = camera.CaptureRGBA()
-    detections = net.Detect(img, width, height)
+    # Set overlay=0 to prevent automatic bounding box drawing
+    detections = net.Detect(img, width, height, overlay="none")
 
     dog_detected = False
 
@@ -22,8 +23,19 @@ while display.IsOpen():
         if class_desc == "dog":
             dog_detected = True
             # Draw bounding box and label only for dogs
-            jetson.utils.cudaDrawRect(img, (int(detection.Left), int(detection.Top), int(detection.Right), int(detection.Bottom)), (255, 255, 0, 255))
-            jetson.utils.cudaDrawText(img, "dog", int(detection.Left), int(detection.Top)-20, (255, 255, 0, 255), img.shape[1] if hasattr(img, 'shape') else width)
+            jetson.utils.cudaDrawRect(
+                img,
+                (int(detection.Left), int(detection.Top), int(detection.Right), int(detection.Bottom)),
+                (255, 255, 0, 255)
+            )
+            jetson.utils.cudaDrawText(
+                img,
+                "dog",
+                int(detection.Left),
+                int(detection.Top) - 20,
+                (255, 255, 0, 255),
+                width
+            )
 
     # Update the log file based on detection
     with open("detection_logs.txt", "w") as log_file:
