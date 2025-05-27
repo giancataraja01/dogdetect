@@ -1,0 +1,17 @@
+Running All Python Apps
+Step 1
+*** Running the and activating the ultrasonic speaker
+python3 makesound.py
+
+Step2
+*** Running the detection
+python3 detection.py
+
+Step3
+*** Running the distance while updating the firebase db
+sudo python3.12 check_distance.py
+
+Step4
+*** Running Jetson status
+sudo python3.12 jetson_status.py
+
